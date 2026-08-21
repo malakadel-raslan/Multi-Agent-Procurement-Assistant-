@@ -1,0 +1,68 @@
+search_task:
+  description: >
+    Search the web for "{category}" products that could satisfy this
+    company's procurement request. Company context (budget, required specs,
+    vendor policy) is:
+
+    {company_context}
+
+    Use the search tool to find at least {min_results} distinct candidate
+    product listings from DIFFERENT retailers/vendors. For each, capture the
+    product name, the retailer, and the direct product URL.
+  expected_output: >
+    A JSON list of candidate objects, each with keys: "product_name",
+    "vendor", "url". At least {min_results} items from at least 3 distinct
+    vendors.
+  agent: market_researcher
+
+extract_task:
+  description: >
+    For every candidate URL found in the previous step, scrape the page and
+    extract: price (numeric, USD), full spec list (RAM, storage, CPU,
+    battery life, screen size, weight), seller rating (0-5), and warranty
+    (months). If a page cannot be scraped or a field is missing, mark that
+    field as null rather than inventing a value.
+  expected_output: >
+    A JSON list of product records, each with keys: "product_name",
+    "vendor", "url", "price_usd", "specs" (object), "seller_rating",
+    "warranty_months".
+  agent: data_extractor
+  context:
+    - search_task
+
+compare_task:
+  description: >
+    Compare every extracted product record against the company's budget,
+    required specs, nice-to-haves and vendor policy (see context below),
+    using the company's evaluation weights to compute a 0-100 value score
+    for each product. Disqualify anything that violates a hard requirement
+    (over budget, below minimum specs, excluded vendor, rating below
+    minimum). Rank the remaining products best-to-worst.
+
+    Company context:
+    {company_context}
+  expected_output: >
+    A JSON object with keys "ranked" (list of qualifying products sorted
+    best-first, each annotated with "value_score" and "why") and
+    "disqualified" (list of products with a one-line "reason").
+  agent: procurement_analyst
+  context:
+    - extract_task
+
+report_task:
+  description: >
+    Using the ranked comparison, write a professional procurement report as
+    clean, self-contained HTML (inline CSS, no external assets). Structure:
+    1) Executive summary with the #1 recommendation and why.
+    2) A comparison table of all qualifying products (price, key specs,
+       vendor, rating, value score).
+    3) A short paragraph per top-3 product explaining trade-offs.
+    4) A brief note on any disqualified products and why.
+    The report must look like something a procurement manager would be
+    comfortable forwarding to a director — no placeholder text.
+  expected_output: >
+    A single complete HTML document as a string, ready to save to a .html
+    file and open in a browser.
+  agent: report_writer
+  context:
+    - compare_task
